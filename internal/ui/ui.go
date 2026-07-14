@@ -661,3 +661,21 @@ func parseHex(s string) ([]byte, error) {
 	}
 	return []byte(s), nil
 }
+
+func (a *App) showAboutDialog() {
+	aboutText := fmt.Sprintf(`SoftHSM v2 Manager
+Version: %s
+
+A GUI application for managing SoftHSM v2 tokens and cryptographic keys.
+
+Repository: https://github.com/andrewchanlab/softhsm-gui
+
+Supports:
+• Local SoftHSM v2 tokens
+• SSH remote HSM access
+• RSA key generation (2048, 4096 bits)
+• EC key generation (secp256r1, secp384r1, secp521r1)
+• PKCS#8 key import
+• Object listing and management`, softhsmgui.Version)
+	dialog.ShowInformation("About SoftHSM v2 Manager", aboutText, a.window)
+}
