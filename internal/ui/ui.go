@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -13,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
@@ -32,26 +30,22 @@ type App struct {
 
 	// State
 	currentBackend hsm.Backend
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx            context.Context
+	cancel         context.CancelFunc
+	objects        []hsm.HSMObject
 
-	// UI elements
-	slotList     *widget.ListView
-	objectsList  *widget.ListView
-	slotInfo     *widget.MultiLineEntry
+	// UI elements (built in buildUI, referenced by callbacks)
+	slotInfo     *widget.Entry
 	statusBar    *widget.Label
 	userPINEntry *widget.Entry
-
-	slotData binding.UntypedList
-	objData  binding.UntypedList
+	objectsList  *widget.List
 }
 
 func NewApp() *App {
 	a := &App{
-		fyneApp:        app.NewWithID("com.c2hlab.softhsm-gui"),
-		activeBackend:  binding.NewString(),
-		slotData:       binding.NewUntypedList(),
-		objData:        binding.NewUntypedList(),
+		fyneApp:       app.NewWithID("com.c2hlab.softhsm-gui"),
+		activeBackend: binding.NewString(),
+		userPINEntry:  widget.NewEntry(),
 	}
 	a.ctx, a.cancel = context.WithCancel(context.Background())
 	a.initBackends()
@@ -165,22 +159,21 @@ func (a *App) buildUI() fyne.CanvasObject {
 	objLabel.TextStyle.Bold = true
 
 	objectsList := widget.NewList(
-		func() int { return a.objData.Length() },
+		func() int { return len(a.objects) },
 		func() fyne.CanvasObject {
 			return widget.NewLabel("object")
 		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
 			l := obj.(*widget.Label)
-			if item, _ := a.objData.GetItem(id); item != nil {
-				o := item.(hsm.HSMObject)
+			if id < len(a.objects) {
+				o := a.objects[id]
 				l.SetText(fmt.Sprintf("[%s] %s | ID:%x", o.KeyType, o.Label, o.ID))
 			}
 		},
 	)
 	objectsList.OnSelected = func(id widget.ListItemID) {
-		if item, _ := a.objData.GetItem(id); item != nil {
-			o := item.(hsm.HSMObject)
-			a.showObjectActions(o)
+		if id < len(a.objects) {
+			a.showObjectActions(a.objects[id])
 		}
 	}
 	a.objectsList = objectsList
@@ -235,7 +228,6 @@ func (a *App) refreshSlots() {
 		return
 	}
 
-	a.slotData.Set(slots)
 	a.slotInfo.SetText("")
 	for _, s := range slots {
 		info := fmt.Sprintf("Slot %d: %s (init=%v, pin=%v)\n",
@@ -246,7 +238,6 @@ func (a *App) refreshSlots() {
 }
 
 func (a *App) openSession() {
-	slotIDStr := "" // TODO: get from selected slot
 	pin := a.userPINEntry.Text
 	if pin == "" {
 		dialog.ShowInformation("PIN Required", "Enter user PIN first", a.window)
@@ -276,7 +267,10 @@ func (a *App) closeSession() {
 	if a.currentBackend != nil {
 		a.currentBackend.CloseSession()
 	}
-	a.objData.Set(nil)
+	a.objects = nil
+	if a.objectsList != nil {
+		a.objectsList.Refresh()
+	}
 	a.setStatus("Session closed")
 }
 
@@ -290,11 +284,10 @@ func (a *App) loadObjects() {
 		return
 	}
 
-	items := make([]any, len(objects))
-	for i := range objects {
-		items[i] = objects[i]
+	a.objects = objects
+	if a.objectsList != nil {
+		a.objectsList.Refresh()
 	}
-	a.objData.Set(items)
 	a.setStatus(fmt.Sprintf("Session open — %d object(s)", len(objects)))
 }
 
