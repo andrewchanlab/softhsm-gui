@@ -3,7 +3,7 @@ module github.com/andrewchanlab/softhsm-gui
 go 1.22
 
 require (
-	github.com/fyne-io/fyne/v2 v2.8.0
+	fyne.io/fyne/v2 v2.8.0
 	github.com/miekg/pkcs11 v1.1.1
 	golang.org/x/crypto v0.27.0
 	golang.org/x/sys v0.25.0
