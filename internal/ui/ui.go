@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/andrewchanlab/softhsm-gui"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/local"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/ssh"
