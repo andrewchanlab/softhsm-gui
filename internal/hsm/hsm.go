@@ -2,7 +2,6 @@ package hsm
 
 import (
 	"context"
-	"crypto/x509"
 	"time"
 )
 
