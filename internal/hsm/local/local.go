@@ -1,7 +1,6 @@
 package local
 
 import (
-	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
@@ -85,11 +84,11 @@ func (b *Backend) ListSlots(ctx context.Context) ([]hsm.SlotInfo, error) {
 		tokenInfo, _ := b.p11.GetTokenInfo(slot)
 		si := hsm.SlotInfo{
 			SlotID:      slot,
-			TokenLabel:  string(bytes.TrimRight(info.SlotDescription[:], " ")),
-			TokenSerial: string(bytes.TrimRight(tokenInfo.SerialNumber[:], " ")),
-			Initialized: tokenInfo.SerialNumber != [16]byte{},
-			PINInit:     tokenInfo.SerialNumber != [16]byte{},
-			ReadOnly:    info.Flags&pkcs11.SOFTSLOT_RO == 1,
+			TokenLabel:  strings.TrimRight(string(info.SlotDescription), " "),
+			TokenSerial: strings.TrimRight(string(tokenInfo.SerialNumber), " "),
+			Initialized: tokenInfo.SerialNumber != "",
+			PINInit:     tokenInfo.SerialNumber != "",
+			ReadOnly:    false,
 		}
 		result = append(result, si)
 	}
@@ -98,7 +97,7 @@ func (b *Backend) ListSlots(ctx context.Context) ([]hsm.SlotInfo, error) {
 
 // InitToken implements hsm.Backend
 func (b *Backend) InitToken(ctx context.Context, slotID uint, label, soPIN, userPIN string) error {
-	return b.p11.InitToken(slotID, []byte(soPIN), label)
+	return b.p11.InitToken(slotID, soPIN, label)
 }
 
 // DeleteToken implements hsm.Backend
@@ -112,7 +111,7 @@ func (b *Backend) OpenSession(ctx context.Context, slotID uint, userPIN string) 
 	if err != nil {
 		return fmt.Errorf("open session: %w", err)
 	}
-	if err := b.p11.Login(session, pkcs11.CKU_USER, []byte(userPIN)); err != nil {
+	if err := b.p11.Login(session, pkcs11.CKU_USER, userPIN); err != nil {
 		b.p11.CloseSession(session)
 		return fmt.Errorf("login: %w", err)
 	}

@@ -58,7 +58,7 @@ func (b *Backend) Config() map[string]string {
 }
 
 func (b *Backend) ssh(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "ssh", b.host, b.binary, args...)
+	cmd := exec.CommandContext(ctx, "ssh", append([]string{b.host, b.binary}, args...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
