@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/andrewchanlab/softhsm-gui"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/local"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/ssh"
@@ -53,9 +54,10 @@ func NewApp() *App {
 }
 
 func (a *App) Run() {
-	a.window = a.fyneApp.NewWindow("SoftHSM v2 Manager")
+	a.window = a.fyneApp.NewWindow("SoftHSM v2 Manager v" + softhsmgui.Version)
 	a.window.Resize(fyne.NewSize(900, 650))
 	a.window.SetContent(a.buildUI())
+	a.window.CreateShortcuts()
 	a.window.ShowAndRun()
 }
 
@@ -109,13 +111,17 @@ func (a *App) buildUI() fyne.CanvasObject {
 
 	// Add SSH backend button
 	addSSH := widget.NewButton("+ SSH Remote", func() {
-		a.showAddSSHdialog()
+		a.showAddSSHDialog()
+	})
+
+	helpBtn := widget.NewButton("Help", func() {
+		a.showAboutDialog()
 	})
 
 	header := container.NewBorder(
 		nil, nil,
 		widget.NewLabel("HSM Source:"),
-		container.NewHBox(addSSH, widget.NewButton("⟳ Refresh", func() { a.refreshSlots() })),
+		container.NewHBox(addSSH, widget.NewButton("⟳ Refresh", func() { a.refreshSlots() }), helpBtn),
 		sourceSelect,
 	)
 
@@ -429,15 +435,18 @@ func (a *App) deleteSelected() {
 
 // ---- SSH Backend ----
 
-func (a *App) showAddSSHdialog() {
+func (a *App) showAddSSHDialog() {
 	hostE := widget.NewEntry()
 	binaryE := widget.NewEntry()
 	binaryE.SetText("softhsm2-util")
+	keyFileE := widget.NewEntry()
+	keyFileE.SetText("")
 
 	form := dialog.NewForm("Add SSH Remote HSM", "Add", "Cancel",
 		[]*widget.FormItem{
 			widget.NewFormItem("Host (user@server)", hostE),
 			widget.NewFormItem("Binary path", binaryE),
+			widget.NewFormItem("Key file (optional)", keyFileE),
 		},
 		func(confirmed bool) {
 			if !confirmed {
@@ -447,7 +456,8 @@ func (a *App) showAddSSHdialog() {
 			if host == "" {
 				return
 			}
-			be := ssh.NewBackend(host)
+			keyFile := strings.TrimSpace(keyFileE.Text)
+			be := ssh.NewBackend(host, keyFile)
 			a.backends = append(a.backends, be)
 			a.setStatus(fmt.Sprintf("Added SSH backend: %s", be.Name()))
 		}, a.window)

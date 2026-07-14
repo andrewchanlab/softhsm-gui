@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
 )
@@ -16,6 +17,7 @@ import (
 // Backend implements hsm.Backend for remote SoftHSM via SSH
 type Backend struct {
 	host    string // user@host:port
+	keyFile string // path to SSH private key file (optional)
 	binary  string // path to softhsm2-util on remote
 	conn    *sshConnection
 	slotID  uint
@@ -39,10 +41,12 @@ var curveOIDMap = map[string]string{
 
 // NewBackend creates a new SSH backend
 // host: user@hostname or user@hostname:port
-func NewBackend(host string) *Backend {
+// keyFile: optional path to SSH private key for authentication
+func NewBackend(host string, keyFile string) *Backend {
 	return &Backend{
-		host:   host,
-		binary: "softhsm2-util",
+		host:    host,
+		keyFile: keyFile,
+		binary:  "softhsm2-util",
 	}
 }
 
@@ -52,13 +56,22 @@ func (b *Backend) Name() string { return "SSH: " + b.host }
 // Config implements hsm.Backend
 func (b *Backend) Config() map[string]string {
 	return map[string]string{
-		"host":   b.host,
-		"binary": b.binary,
+		"host":    b.host,
+		"keyFile": b.keyFile,
+		"binary":  b.binary,
 	}
 }
 
 func (b *Backend) ssh(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "ssh", append([]string{b.host, b.binary}, args...)...)
+	sshArgs := []string{}
+	if b.keyFile != "" {
+		sshArgs = append(sshArgs, "-i", b.keyFile)
+	}
+	sshArgs = append(sshArgs, b.host)
+	sshArgs = append(sshArgs, b.binary)
+	sshArgs = append(sshArgs, args...)
+
+	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -68,12 +81,47 @@ func (b *Backend) ssh(ctx context.Context, args ...string) (string, error) {
 	return string(out), nil
 }
 
+// scp copies a local file to a remote location via SCP with optional key auth
+func (b *Backend) scp(ctx context.Context, localPath, remotePath string) error {
+	scpArgs := []string{}
+	if b.keyFile != "" {
+		scpArgs = append(scpArgs, "-i", b.keyFile)
+	}
+	scpArgs = append(scpArgs, localPath, b.host+":"+remotePath)
+
+	cmd := exec.CommandContext(ctx, "scp", scpArgs...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("scp: %s", stderr.String())
+	}
+	return nil
+}
+
 // Connect implements hsm.Backend
 func (b *Backend) Connect(ctx context.Context) error {
-	// Test connectivity
+	// Test connectivity with better error handling for SSH failures
 	out, err := b.ssh(ctx, "--show-slots")
 	if err != nil {
-		return fmt.Errorf("SSH connection test failed: %w", err)
+		// Check for common SSH connection failures
+		errStr := err.Error()
+		if strings.Contains(errStr, "Connection refused") {
+			return fmt.Errorf("SSH connection refused to %s: check if SSH server is running", b.host)
+		}
+		if strings.Contains(errStr, "No route to host") {
+			return fmt.Errorf("SSH cannot reach %s: network issue or host is down", b.host)
+		}
+		if strings.Contains(errStr, "Permission denied") {
+			return fmt.Errorf("SSH authentication failed for %s: check credentials or key file", b.host)
+		}
+		if strings.Contains(errStr, "Host key verification failed") {
+			return fmt.Errorf("SSH host key verification failed for %s: potential security issue", b.host)
+		}
+		if strings.Contains(errStr, "Connection timed out") {
+			return fmt.Errorf("SSH connection to %s timed out", b.host)
+		}
+		return fmt.Errorf("SSH connection test failed for %s: %w", b.host, err)
 	}
 	if strings.Contains(out, "error") || strings.Contains(out, "Error") {
 		return fmt.Errorf("softhsm2-util error: %s", out)
@@ -281,12 +329,24 @@ func curveToBits(curve string) int {
 }
 
 // ImportKey via softhsm2-util --import on remote
+// Transfers PKCS#8 file via SCP then runs softhsm2-util --import
 func (b *Backend) ImportKey(ctx context.Context, label, pkcs8Path, filePIN string) error {
 	if b.session == nil {
 		return fmt.Errorf("no session open")
 	}
+
+	// Generate a unique temporary filename on remote
+	remoteTmpPath := fmt.Sprintf("/tmp/softhsm_import_%d.pem", time.Now().UnixNano())
+
+	// Copy PKCS#8 file to remote via SCP
+	if err := b.scp(ctx, pkcs8Path, remoteTmpPath); err != nil {
+		return fmt.Errorf("failed to transfer key file: %w", err)
+	}
+
+	// Build import args
 	args := []string{
-		"--import", pkcs8Path,
+		"--import",
+		"--file", remoteTmpPath,
 		"--slot", fmt.Sprintf("%d", b.session.slotID),
 		"--label", label,
 		"--id", hex.EncodeToString([]byte(b.session.userPIN)[:1]),
@@ -295,8 +355,23 @@ func (b *Backend) ImportKey(ctx context.Context, label, pkcs8Path, filePIN strin
 	if filePIN != "" {
 		args = append(args, "--file-pin", filePIN)
 	}
-	_, err := b.ssh(ctx, args...)
-	return err
+
+	// Run softhsm2-util --import on remote
+	out, err := b.ssh(ctx, args...)
+	if err != nil {
+		// Clean up temp file even on failure
+		b.ssh(ctx, "rm", "-f", remoteTmpPath)
+		return fmt.Errorf("softhsm2-util --import failed: %s %s", out, err.Error())
+	}
+
+	// Clean up temp file
+	b.ssh(ctx, "rm", "-f", remoteTmpPath)
+
+	if strings.Contains(out, "error") || strings.Contains(out, "Error") {
+		return fmt.Errorf("softhsm2-util --import error: %s", out)
+	}
+
+	return nil
 }
 
 // ExportPublicKey via remote Python script
