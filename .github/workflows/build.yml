@@ -79,7 +79,7 @@ jobs:
           path: ${{ matrix.artifact_name }}
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -97,7 +97,11 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files_from_asset_name: true
+          tag_name: latest
+          name: Latest Build
+          body: "Auto-generated release from commit ${{ github.sha }}"
+          files: artifacts/**/*
           draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
