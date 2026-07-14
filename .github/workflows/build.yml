@@ -70,7 +70,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
-          go build -ldflags="-s -w" -o "${{ matrix.artifact_name }}" .
+          go build -mod=mod -ldflags="-s -w" -o "${{ matrix.artifact_name }}" .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
