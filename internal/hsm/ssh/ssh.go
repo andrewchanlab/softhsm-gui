@@ -7,10 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
 )
@@ -60,7 +58,7 @@ func (b *Backend) Config() map[string]string {
 }
 
 func (b *Backend) ssh(ctx context.Context, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "ssh", b.host, append([]string{b.binary}, args...)...)
+	cmd := exec.CommandContext(ctx, "ssh", b.host, b.binary, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
@@ -291,7 +289,7 @@ func (b *Backend) ImportKey(ctx context.Context, label, pkcs8Path, filePIN strin
 		"--import", pkcs8Path,
 		"--slot", fmt.Sprintf("%d", b.session.slotID),
 		"--label", label,
-		"--id", hex.EncodeToString(b.session.userPIN[:1]),
+		"--id", hex.EncodeToString([]byte(b.session.userPIN)[:1]),
 		"--pin", b.session.userPIN,
 	}
 	if filePIN != "" {
