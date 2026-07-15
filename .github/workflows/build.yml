@@ -70,8 +70,15 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
+          set -x
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-          go build -mod=mod -ldflags="-s -w -X internal/version.Version=${VERSION}" -o "${{ matrix.artifact_name }}" . > build.log 2>&1 || { cat build.log; exit 1; }
+          echo "VERSION=$VERSION"
+          ls -la
+          go build -mod=mod -ldflags="-s -w -X internal/version.Version=${VERSION}" -o "${{ matrix.artifact_name }}" . 2>&1 | tee build.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "EXIT_CODE=$EXIT_CODE"
+          if [ $EXIT_CODE -ne 0 ]; then echo "=== BUILD FAILED ==="; cat build.log; fi
+          exit $EXIT_CODE
 
       - name: Upload build log
         if: failure()
