@@ -71,7 +71,7 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-          go build -mod=mod -ldflags="-s -w -X main.Version=${VERSION}" -o "${{ matrix.artifact_name }}" . > build.log 2>&1 || { cat build.log; exit 1; }
+          go build -mod=mod -ldflags="-s -w -X internal/version.Version=${VERSION}" -o "${{ matrix.artifact_name }}" . > build.log 2>&1 || { cat build.log; exit 1; }
 
       - name: Upload build log
         if: failure()
