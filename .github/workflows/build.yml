@@ -71,7 +71,7 @@ jobs:
           CGO_ENABLED: ${{ matrix.cgo }}
         run: |
           VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
-          go build -mod=mod -ldflags="-s -w -X main.Version=${VERSION}" -o "${{ matrix.artifact_name }}" .
+          go build -v -mod=mod -ldflags="-s -w -X main.Version=${VERSION}" -o "${{ matrix.artifact_name }}" . 2>&1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
