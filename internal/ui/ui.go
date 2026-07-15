@@ -14,10 +14,10 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/andrewchanlab/softhsm-gui"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/local"
 	"github.com/andrewchanlab/softhsm-gui/internal/hsm/ssh"
+	"github.com/andrewchanlab/softhsm-gui/internal/version"
 )
 
 // App is the main Fyne application
@@ -677,6 +677,6 @@ Supports:
 • RSA key generation (2048, 4096 bits)
 • EC key generation (secp256r1, secp384r1, secp521r1)
 • PKCS#8 key import
-• Object listing and management`, softhsmgui.Version)
+• Object listing and management`, version.Version)
 	dialog.ShowInformation("About SoftHSM v2 Manager", aboutText, a.window)
 }
